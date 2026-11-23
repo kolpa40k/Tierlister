@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/widget"
 
 	"tierlist-app/storage"
 	"tierlist-app/ui"
@@ -26,7 +27,7 @@ func main() {
 		log.Printf("не удалось загрузить настройки: %v", err)
 	}
 	if settings == nil || settings.ThemeName == "" {
-		settings = &storage.Settings{ThemeName: "Классическая"}
+		settings = &storage.Settings{ThemeName: "Discord"}
 	}
 	ui.ApplyPreset(myApp, settings.ThemeName)
 
@@ -42,23 +43,26 @@ func main() {
 		changed, migErr := storage.MigrateAllImages(categories)
 		if migErr != nil {
 			log.Printf("ошибка миграции картинок: %v", migErr)
-		} else if changed {
+		}
+		if changed {
 			if err := storage.SaveCategories(categories); err != nil {
 				log.Printf("не удалось сохранить после миграции: %v", err)
-			} else {
-				log.Printf("миграция картинок выполнена, пути обновлены")
 			}
 		}
 	}
 
-	myWindow.SetContent(ui.NewHomeScreen(myWindow, categories))
+	if loadErr == nil {
+		myWindow.SetContent(ui.NewHomeScreen(myWindow, categories))
+	} else {
+		myWindow.SetContent(widget.NewLabel("Не удалось загрузить данные. Исправьте файл категорий перед повторным запуском."))
+	}
 
 	if loadErr != nil {
 		myApp.Lifecycle().SetOnStarted(func() {
 			dialog.ShowError(
 				fmt.Errorf(
-					"Не удалось загрузить сохранённые категории.\n"+
-						"Приложение запущено с пустым списком.\n\n%v",
+					"не удалось загрузить сохранённые категории.\n"+
+						"Сохранение отключено, чтобы не перезаписать повреждённый файл.\n\n%v",
 					loadErr,
 				),
 				myWindow,

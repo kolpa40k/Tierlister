@@ -31,7 +31,7 @@ func NewHomeScreen(win fyne.Window, categories []models.Category) fyne.CanvasObj
 	if s, err := storage.LoadSettings(); err == nil && s != nil {
 		h.currentTheme = s.ThemeName
 	} else {
-		h.currentTheme = "Классическая"
+		h.currentTheme = "Discord"
 	}
 
 	h.editBtn = widget.NewButton("Изменить", func() {
@@ -47,7 +47,7 @@ func NewHomeScreen(win fyne.Window, categories []models.Category) fyne.CanvasObj
 		h.showThemeDialog()
 	})
 
-	top := container.NewHBox(createBtn, h.editBtn, themeBtn)
+	top := container.NewHBox(widget.NewLabelWithStyle("КАТЕГОРИИ", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), createBtn, themeBtn)
 	h.content = container.NewBorder(
 		top, nil, nil, nil,
 		container.NewVScroll(h.listBox),
@@ -92,7 +92,6 @@ func (h *HomeScreen) toggleEditMode() {
 func (h *HomeScreen) rebuildList() {
 	h.listBox.Objects = nil
 	for i := range h.categories {
-		i := i
 		row := NewEditableRow(
 			h.categories[i].Name,
 			h.editMode,
@@ -116,11 +115,10 @@ func (h *HomeScreen) renameCategory(idx int) {
 			if !ok || entry.Text == "" {
 				return
 			}
-			h.categories[idx].Name = entry.Text
-			h.rebuildList()
-			if err := storage.SaveCategories(h.categories); err != nil {
-				dialog.ShowError(err, h.window)
-			}
+			h.commit(func(categories []models.Category) ([]models.Category, error) {
+				categories[idx].Name = entry.Text
+				return categories, nil
+			})
 		}, h.window,
 	)
 }
@@ -140,11 +138,9 @@ func (h *HomeScreen) deleteCategory(idx int) {
 			if !ok {
 				return
 			}
-			h.categories = append(h.categories[:idx], h.categories[idx+1:]...)
-			h.rebuildList()
-			if err := storage.SaveCategories(h.categories); err != nil {
-				dialog.ShowError(err, h.window)
-			}
+			h.commit(func(categories []models.Category) ([]models.Category, error) {
+				return append(categories[:idx], categories[idx+1:]...), nil
+			})
 		}, h.window,
 	)
 }
@@ -161,11 +157,19 @@ func (h *HomeScreen) showCreateCategoryDialog() {
 			if !ok || entry.Text == "" {
 				return
 			}
-			h.categories = append(h.categories, models.Category{Name: entry.Text})
-			h.rebuildList()
-			if err := storage.SaveCategories(h.categories); err != nil {
-				dialog.ShowError(err, h.window)
-			}
+			h.commit(func(categories []models.Category) ([]models.Category, error) {
+				return append(categories, models.Category{Name: entry.Text}), nil
+			})
 		}, h.window,
 	)
+}
+
+func (h *HomeScreen) commit(mutate func([]models.Category) ([]models.Category, error)) {
+	next, err := persistCategories(h.categories, mutate)
+	if err != nil {
+		dialog.ShowError(err, h.window)
+		return
+	}
+	h.categories = next
+	h.rebuildList()
 }

@@ -1,10 +1,11 @@
 package storage
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-
 	"tierlist-app/models"
 )
 
@@ -17,16 +18,31 @@ func imagesDir() (string, error) {
 }
 
 func isInside(path, dir string) bool {
-	absPath, err1 := filepath.Abs(path)
-	absDir, err2 := filepath.Abs(dir)
-	if err1 != nil || err2 != nil {
-		return false
-	}
-	rel, err := filepath.Rel(absDir, absPath)
+	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return false
 	}
-	return !strings.HasPrefix(rel, "..") && rel != "."
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(absDir, absPath)
+	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func migrateItem(item *models.TierItem, dir string) (bool, error) {
+	if item.ImagePath == "" || item.ID == "" || isInside(item.ImagePath, dir) {
+		return false, nil
+	}
+	if _, err := os.Stat(item.ImagePath); err != nil {
+		return false, fmt.Errorf("source image %q: %w", item.ImagePath, err)
+	}
+	newPath, err := ImportImage(item.ImagePath, item.ID)
+	if err != nil {
+		return false, fmt.Errorf("migrate image %q: %w", item.ImagePath, err)
+	}
+	item.ImagePath = newPath
+	return true, nil
 }
 
 func MigrateAllImages(categories []models.Category) (bool, error) {
@@ -34,43 +50,27 @@ func MigrateAllImages(categories []models.Category) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-
 	changed := false
-
-	migrateItem := func(item *models.TierItem) {
-		if item.ImagePath == "" {
-			return
-		}
-		if item.ID == "" {
-			return
-		}
-		if isInside(item.ImagePath, dir) {
-			return
-		}
-		if _, err := os.Stat(item.ImagePath); err != nil {
-			return
-		}
-		newPath, err := ImportImage(item.ImagePath, item.ID)
+	var failures []error
+	visit := func(item *models.TierItem) {
+		updated, err := migrateItem(item, dir)
+		changed = changed || updated
 		if err != nil {
-			return
+			failures = append(failures, err)
 		}
-		item.ImagePath = newPath
-		changed = true
 	}
-
 	for ci := range categories {
 		for ti := range categories[ci].TierLists {
-			tl := &categories[ci].TierLists[ti]
-			for tierIdx := range tl.Tiers {
-				for i := range tl.Tiers[tierIdx].Items {
-					migrateItem(&tl.Tiers[tierIdx].Items[i])
+			list := &categories[ci].TierLists[ti]
+			for tier := range list.Tiers {
+				for i := range list.Tiers[tier].Items {
+					visit(&list.Tiers[tier].Items[i])
 				}
 			}
-			for i := range tl.Pool {
-				migrateItem(&tl.Pool[i])
+			for i := range list.Pool {
+				visit(&list.Pool[i])
 			}
 		}
 	}
-
-	return changed, nil
+	return changed, errors.Join(failures...)
 }

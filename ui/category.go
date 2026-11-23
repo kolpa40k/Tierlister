@@ -7,7 +7,6 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"tierlist-app/models"
-	"tierlist-app/storage"
 )
 
 type CategoryScreen struct {
@@ -41,7 +40,7 @@ func NewCategoryScreen(win fyne.Window, categories *[]models.Category, catIdx in
 		win.SetContent(NewHomeScreen(win, *categories))
 	})
 
-	top := container.NewHBox(backBtn, createBtn, cs.editBtn)
+	top := container.NewHBox(backBtn, widget.NewLabelWithStyle(cat.Name, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), createBtn)
 	cs.content = container.NewBorder(
 		top, nil, nil, nil,
 		container.NewVScroll(cs.listBox),
@@ -64,7 +63,6 @@ func (cs *CategoryScreen) rebuildList() {
 	cs.listBox.Objects = nil
 	cat := (*cs.categories)[cs.catIdx]
 	for i := range cat.TierLists {
-		i := i
 		row := NewEditableRow(
 			cat.TierLists[i].Name,
 			cs.editMode,
@@ -89,11 +87,10 @@ func (cs *CategoryScreen) renameTierList(idx int) {
 			if !ok || entry.Text == "" {
 				return
 			}
-			cat.TierLists[idx].Name = entry.Text
-			cs.rebuildList()
-			if err := storage.SaveCategories(*cs.categories); err != nil {
-				dialog.ShowError(err, cs.window)
-			}
+			cs.commit(func(categories []models.Category) error {
+				categories[cs.catIdx].TierLists[idx].Name = entry.Text
+				return nil
+			})
 		}, cs.window,
 	)
 }
@@ -115,12 +112,11 @@ func (cs *CategoryScreen) deleteTierList(idx int) {
 			if !ok {
 				return
 			}
-			cat := &(*cs.categories)[cs.catIdx]
-			cat.TierLists = append(cat.TierLists[:idx], cat.TierLists[idx+1:]...)
-			cs.rebuildList()
-			if err := storage.SaveCategories(*cs.categories); err != nil {
-				dialog.ShowError(err, cs.window)
-			}
+			cs.commit(func(categories []models.Category) error {
+				cat := &categories[cs.catIdx]
+				cat.TierLists = append(cat.TierLists[:idx], cat.TierLists[idx+1:]...)
+				return nil
+			})
 		}, cs.window,
 	)
 }
@@ -137,12 +133,26 @@ func (cs *CategoryScreen) showCreateTierListDialog() {
 			if !ok || entry.Text == "" {
 				return
 			}
-			cat := &(*cs.categories)[cs.catIdx]
-			cat.TierLists = append(cat.TierLists, models.NewTierList(entry.Text))
-			cs.rebuildList()
-			if err := storage.SaveCategories(*cs.categories); err != nil {
-				dialog.ShowError(err, cs.window)
-			}
+			cs.commit(func(categories []models.Category) error {
+				cat := &categories[cs.catIdx]
+				cat.TierLists = append(cat.TierLists, models.NewTierList(entry.Text))
+				return nil
+			})
 		}, cs.window,
 	)
+}
+
+func (cs *CategoryScreen) commit(mutate func([]models.Category) error) {
+	next, err := persistCategories(*cs.categories, func(categories []models.Category) ([]models.Category, error) {
+		if err := mutate(categories); err != nil {
+			return nil, err
+		}
+		return categories, nil
+	})
+	if err != nil {
+		dialog.ShowError(err, cs.window)
+		return
+	}
+	*cs.categories = next
+	cs.rebuildList()
 }

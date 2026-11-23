@@ -47,9 +47,11 @@ type Tier struct {
 }
 
 type TierList struct {
-	Name  string     `json:"name"`
-	Tiers []Tier     `json:"tiers"`
-	Pool  []TierItem `json:"pool,omitempty"`
+	ShowLabels *bool      `json:"show_labels,omitempty"`
+	ImageFit   string     `json:"image_fit,omitempty"`
+	Name       string     `json:"name"`
+	Tiers      []Tier     `json:"tiers"`
+	Pool       []TierItem `json:"pool,omitempty"`
 }
 
 type Category struct {
@@ -69,4 +71,15 @@ func NewTierList(name string) TierList {
 		},
 		Pool: []TierItem{},
 	}
+}
+
+// LabelsVisible defaults to true for tier lists created before display settings existed.
+func (tl TierList) LabelsVisible() bool { return tl.ShowLabels == nil || *tl.ShowLabels }
+
+// ImageFillMode defaults to cover, which avoids letterboxing.
+func (tl TierList) ImageFillMode() string {
+	if tl.ImageFit == "contain" {
+		return "contain"
+	}
+	return "cover"
 }

@@ -17,12 +17,17 @@ type ThemePreset struct {
 // CustomTheme оборачивает базовую тему Fyne, подменяя часть цветов.
 type CustomTheme struct {
 	Base   fyne.Theme
+	Dark   bool
 	Colors map[fyne.ThemeColorName]color.Color
 }
 
-func (t *CustomTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
+func (t *CustomTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Color {
 	if c, ok := t.Colors[name]; ok {
 		return c
+	}
+	variant := theme.VariantLight
+	if t.Dark {
+		variant = theme.VariantDark
 	}
 	return t.Base.Color(name, variant)
 }
@@ -35,6 +40,21 @@ func (t *CustomTheme) Size(name fyne.ThemeSizeName) float32       { return t.Bas
 // Primary (акцент — кнопки HighImportance, фокус), Button (фон обычных кнопок),
 // InputBackground (фон полей ввода), MenuBackground (фон диалогов и колонок тиров).
 var Presets = []ThemePreset{
+	{
+		Name: "Discord",
+		Dark: true,
+		Colors: map[fyne.ThemeColorName]color.Color{
+			theme.ColorNameBackground:      color.NRGBA{R: 32, G: 34, B: 37, A: 255},
+			theme.ColorNameForeground:      color.NRGBA{R: 242, G: 243, B: 245, A: 255},
+			theme.ColorNamePrimary:         color.NRGBA{R: 88, G: 101, B: 242, A: 255},
+			theme.ColorNameButton:          color.NRGBA{R: 49, G: 51, B: 56, A: 255},
+			theme.ColorNameInputBackground: color.NRGBA{R: 56, G: 58, B: 64, A: 255},
+			theme.ColorNameMenuBackground:  color.NRGBA{R: 43, G: 45, B: 49, A: 255},
+			theme.ColorNameSeparator:       color.NRGBA{R: 65, G: 67, B: 74, A: 255},
+			theme.ColorNameHover:           color.NRGBA{R: 65, G: 68, B: 76, A: 255},
+			theme.ColorNameSelection:       color.NRGBA{R: 71, G: 82, B: 196, A: 255},
+		},
+	},
 	{
 		Name: "Классическая",
 		Colors: map[fyne.ThemeColorName]color.Color{
@@ -145,12 +165,10 @@ func FindPreset(name string) ThemePreset {
 func ApplyPreset(app fyne.App, name string) string {
 	preset := FindPreset(name)
 
-	base := fyne.Theme(theme.LightTheme())
-	if preset.Dark {
-		base = theme.DarkTheme()
-	}
+	base := theme.DefaultTheme()
 	app.Settings().SetTheme(&CustomTheme{
 		Base:   base,
+		Dark:   preset.Dark,
 		Colors: preset.Colors,
 	})
 	return preset.Name

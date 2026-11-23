@@ -1,12 +1,13 @@
 package storage
 
 import (
-	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 )
 
 const settingsFile = "settings.json"
+const defaultTheme = "Классическая"
 
 type Settings struct {
 	ThemeName string `json:"theme_name"`
@@ -25,34 +26,23 @@ func LoadSettings() (*Settings, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return &Settings{ThemeName: "Классическая"}, nil
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
+	var settings Settings
+	if err := readJSON(path, &settings); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
-	var s Settings
-	if err := json.Unmarshal(data, &s); err != nil {
-		return nil, err
+	if settings.ThemeName == "" {
+		settings.ThemeName = defaultTheme
 	}
-	if s.ThemeName == "" {
-		s.ThemeName = "Классическая"
-	}
-	return &s, nil
+	return &settings, nil
 }
 
-func SaveSettings(s *Settings) error {
+func SaveSettings(settings *Settings) error {
+	if settings == nil {
+		return errors.New("settings must not be nil")
+	}
 	path, err := settingsPath()
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(s, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0644)
+	return writeJSONAtomic(path, settings)
 }
