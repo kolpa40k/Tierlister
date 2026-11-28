@@ -17,7 +17,7 @@ func main() {
 
 	app.SetMetadata(fyne.AppMetadata{
 		Name:    "Tierlist",
-		Version: "1.1.0",
+		Version: "1.2.0",
 		ID:      "com.kolpa40k.tierlist",
 	})
 
